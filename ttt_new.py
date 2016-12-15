@@ -1,6 +1,9 @@
+import copy
 import numpy as np
 
 BS = 3
+EXP_STEPS = 5
+ALPHA = 0.5
 
 def nummatch(match):
     return len(match[0])
@@ -14,7 +17,7 @@ def map_pseudo_to_normal(pseudo_row, pseudo_col):
     if pseudo_row < BS:
         return (pseudo_row, pseudo_col)
     # the second set of BS rows are actual columns
-    elif pseudo_row > BS and pseudo_row < 2*BS:
+    elif pseudo_row >= BS and pseudo_row < 2*BS:
         # here, we just need to transpose them
         return (pseudo_col, pseudo_row-BS)
     # the last to indices stand for diagonal and anti-diagonal, respectively
@@ -57,8 +60,8 @@ def experienced_player(my_mark, op_mark, board):
             return board
         else:
             for (x,y) in [(0,0),(0,2),(2,0),(2,2)]:
-                if board[x,y] == 0:
-                    board[x,y] = my_mark
+                if board[y,x] == 0:
+                    board[y,x] = my_mark
                     return board
     else:
         # if there are two marks or more, iterate over all rows, cols, diags
@@ -80,21 +83,27 @@ def experienced_player(my_mark, op_mark, board):
             if nummatch(opmarks) == 2:
                 blockable.append((num,opmarks))
 
-        for lst in [completable, blockable]:
+        #for verb,lst in zip(["completing","blocking"],[completable,blockable]):
+        for verb,lst in zip(["completing",],[completable,]):
             if len(lst) > 0:
                 free_space = lst[0]
-                print free_space
+                #print free_space
                 for col in range(BS):
                     if col in free_space[1][0]:
                         continue
                     else:
-                        print free_space[0], col
-                        (x,y) = map_pseudo_to_normal(free_space[0], col)
-                        board[x,y] = my_mark
+                        #print verb,"field",free_space[0], col
+                        (y,x) = map_pseudo_to_normal(free_space[0], col)
+                        board[y,x] = my_mark
                         return board
 
         # last resort: randomness
-        
+        #print "Random"
+        empty_fields = np.where(board == 0)
+        field = np.random.randint(len(empty_fields[0]))
+        board[empty_fields[0][field],empty_fields[1][field]] = my_mark
+        return board
+
 def is_win(vals):
     '''Check whether a 1darray contains equal elements greater than zero'''
     if vals[0] == 0:
@@ -117,24 +126,98 @@ def win_or_tie(board):
         return -1
     else:
         return None
+
+
+def get_value(vm, my_mark, op_mark, board):
+    try:
+        return vm[board.tostring()]
+    except KeyError:
+        res = win_or_tie(board)
+        if res == my_mark:
+            return 1.0
+        elif res == op_mark:
+            return 0.0
+        else:
+            return 0.5
+
+def update_value_map(vm, new_value, last_state):
+    key = last_state.tostring()
+    if key in vm:
+        vm[key] = vm[key] + ALPHA*(new_value-vm[key])
+    else:
+        vm[key] = 0.5 + ALPHA*(new_value-0.5)
+    return vm
+
+def reinforcement_player(my_mark, op_mark, board, last_state, vm):
+    # Find out the empty positions
+    empty = np.where(board==0)
+    # Decide whether to move exploratorily or greedily
+    if np.random.randint(EXP_STEPS) == 0:
+        # Explore
+        selected = np.random.randint(len(empty))
+        #print "Random",empty[0][selected],empty[1][selected]
+        board[empty[0][selected],empty[1][selected]] = my_mark
+        return board, vm
+    else:
+        # Follow the value
+        values = []
+        #print empty
+        for y,x in zip(empty[0],empty[1]):
+            new_board = copy.copy(board)
+            new_board[y,x] = my_mark
+            value = get_value(vm, my_mark, op_mark, new_board)
+            if value == 1.0:
+                # done
+                vm = update_value_map(vm, value, last_state)
+                return new_board, vm
+            else:
+                values.append(value)
+        # select maximum value
+        max_idx = np.argmax(values)
+        board[empty[0][max_idx],empty[1][max_idx]] = my_mark
+        vm = update_value_map(vm, values[max_idx], last_state)
+        return board, vm
     
 def main():
-    # Initialize a board
-    board = np.zeros((BS,BS))
-    board = np.random.randint(3, size=(BS,BS))
+    # Initialize the value map
+    value_map = {}
     print()
-    print(board)
-    # Check if it was won
-    result = win_or_tie(board)
-    if result is not None:
-        if result > 0:
-            print "Player",result,"won"
-        else:
-            print "Tie"
-        return result
-    # Let the bot move
-    board = experienced_player(1,2,board)
-    print board
+    for run in range(10000):
+        if run%100 == 0:
+            print "Run",run
+        # Initialize a board
+        board = np.zeros((BS,BS))
+        last_state = board
+        result = None
+        while result is None:
+            #print(board)
+            # Let the experienced bot move first
+            #print "Player 1 (bot)"
+            board = experienced_player(1,2,board)
+            # Check if it was won
+            result = win_or_tie(board)
+            if result is not None:
+                if result > 0:
+                    #print "Player",result,"won"
+                    pass
+                else:
+                    print "Tie"
+                break
+            # let the reinforcement player move second
+            #print "Player 2 (learner)"
+            board, value_map = reinforcement_player(2,1,board,last_state,value_map)
+            last_state = copy.copy(board)
+            result = win_or_tie(board)
+            if result is not None:
+                if result > 0:
+                    print "Player",result,"won"
+                else:
+                    print "Tie"
+                break
+        #print board
+
+    for key,val in value_map.iteritems():
+        print np.fromstring(key), val
 
 if __name__ == '__main__':
     main()
