@@ -1,0 +1,26 @@
+* Tic Tac Toe Reinforcement learning
+** DONE Fix coordinate interpretation
+At the moment coordinates entered by the user are interpreted
+counter-intuitively.
+** TODO Fix agent design in ttt.py
+I don't like the agent's design at the moment.
+It should have only an three methods:
+ - init: to set the last-known state to the empty state
+ - get_action: which gets the current state and chooses an action but does not
+   modify the last-known state
+ - learn: which gets the outcome state and its value and performs TD learning
+** DONE Find out a good model of a first opponent
+   CLOSED: [2016-12-15 Do 15:02]
+This [[http://blog.ostermiller.org/tic-tac-toe-strategy][Website]] mentions 4 different models of computer players:
+- Expert: Brute force, builds a tree of all possible games that can result from
+  a given starting position and chooses that action that leads to a win
+- Novice: Always chooses random moves
+- Intermediate: Plays random unless there are 2 in a row for the opponent (which
+  he then blocks) or unless there are 2 in a row for him (which he then
+  exploits).
+- Experienced: If the bot plays first, it chooses a corner or the center. If it
+  plays second, it chooses a) a corner if the first player took the center or b)
+  the center if the first player took a corner. For all further moves it behaves
+  like an intermediate.
+** TODO Implement a version where the TD agent plays against itself
+
