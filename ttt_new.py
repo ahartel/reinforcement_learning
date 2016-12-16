@@ -1,9 +1,13 @@
 import copy
 import numpy as np
+import matplotlib.pyplot as plt
 
 BS = 3
 EXP_STEPS = 5
 ALPHA = 0.5
+BLOCKING_EXPERT = False
+RUNS = 20000
+EPISODE_LENGTH = 100
 
 def nummatch(match):
     return len(match[0])
@@ -83,8 +87,13 @@ def experienced_player(my_mark, op_mark, board):
             if nummatch(opmarks) == 2:
                 blockable.append((num,opmarks))
 
-        #for verb,lst in zip(["completing","blocking"],[completable,blockable]):
-        for verb,lst in zip(["completing",],[completable,]):
+        verbs = ["completing"]
+        lists = [completable]
+        if BLOCKING_EXPERT:
+            verbs.append("blocking")
+            lists.append(blockable)
+
+        for verb,lst in zip(verbs,lists):
             if len(lst) > 0:
                 free_space = lst[0]
                 #print free_space
@@ -161,28 +170,40 @@ def reinforcement_player(my_mark, op_mark, board, last_state, vm):
     else:
         # Follow the value
         values = []
-        #print empty
+        # Calculate the value of each configuration resulting from a move on
+        # any empty field
         for y,x in zip(empty[0],empty[1]):
             new_board = copy.copy(board)
             new_board[y,x] = my_mark
             value = get_value(vm, my_mark, op_mark, new_board)
+            # if the resulting value is already 1.0 then just take it
             if value == 1.0:
                 # done
                 vm = update_value_map(vm, value, last_state)
                 return new_board, vm
             else:
+                # otherwise collect the value for later
                 values.append(value)
-        # select maximum value
-        max_idx = np.argmax(values)
-        board[empty[0][max_idx],empty[1][max_idx]] = my_mark
-        vm = update_value_map(vm, values[max_idx], last_state)
+        # select maximum value, however if all values are equal then pick a
+        # random field
+        values = np.array(values)
+        match0 = np.where(values==values[0])
+        if len(match0[0]) == len(values):
+            pick = np.random.randint(len(values))
+            board[empty[0][pick],empty[1][pick]] = my_mark
+            vm = update_value_map(vm, values[pick], last_state)
+        else:
+            max_idx = np.argmax(values)
+            board[empty[0][max_idx],empty[1][max_idx]] = my_mark
+            vm = update_value_map(vm, values[max_idx], last_state)
         return board, vm
     
 def main():
     # Initialize the value map
     value_map = {}
+    winning = []
     print()
-    for run in range(10000):
+    for run in range(RUNS):
         if run%100 == 0:
             print "Run",run
         # Initialize a board
@@ -199,9 +220,10 @@ def main():
             if result is not None:
                 if result > 0:
                     #print "Player",result,"won"
-                    pass
+                    winning.append(1)
                 else:
-                    print "Tie"
+                    #print "Tie"
+                    winning.append(0)
                 break
             # let the reinforcement player move second
             #print "Player 2 (learner)"
@@ -210,14 +232,26 @@ def main():
             result = win_or_tie(board)
             if result is not None:
                 if result > 0:
-                    print "Player",result,"won"
+                    #print "Player",result,"won"
+                    winning.append(2)
                 else:
-                    print "Tie"
+                    #print "Tie"
+                    winning.append(0)
                 break
         #print board
 
     for key,val in value_map.iteritems():
         print np.fromstring(key), val
+
+    print np.bincount(winning,minlength=3)
+    fractions = np.zeros((RUNS/EPISODE_LENGTH,3))
+    for episode in range(RUNS/EPISODE_LENGTH):
+        fractions[episode] = np.array(np.bincount(winning[episode*EPISODE_LENGTH:(episode+1)*EPISODE_LENGTH],
+                                                  minlength=3))
+    plt.plot(fractions[:,0])
+    plt.plot(fractions[:,1])
+    plt.plot(fractions[:,2])
+    plt.show()
 
 if __name__ == '__main__':
     main()
