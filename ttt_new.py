@@ -1,13 +1,13 @@
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
-
+plt.style.use('ggplot')
 BS = 3
 EXP_STEPS = 5
 ALPHA = 0.5
 BLOCKING_EXPERT = False
 RUNS = 20000
-EPISODE_LENGTH = 100
+EPISODE_LENGTH = 1000
 
 def nummatch(match):
     return len(match[0])
@@ -247,14 +247,14 @@ def main():
     fractions = np.zeros((RUNS/EPISODE_LENGTH,3))
     for episode in range(RUNS/EPISODE_LENGTH):
         fractions[episode] = np.array(np.bincount(winning[episode*EPISODE_LENGTH:(episode+1)*EPISODE_LENGTH],
-                                                  minlength=3))
-    plt.plot(fractions[:,0])
-    plt.plot(fractions[:,1])
-    plt.plot(fractions[:,2])
+                                                  minlength=3), dtype='float')/EPISODE_LENGTH
+    plt.plot(fractions[:,0], label='draw')
+    plt.plot(fractions[:,1], label='Player 1 (exp.)')
+    plt.plot(fractions[:,2], label='Player 2 (learn)')
+    plt.legend()
     plt.show()
 
 if __name__ == '__main__':
     main()
 
-main()
 
